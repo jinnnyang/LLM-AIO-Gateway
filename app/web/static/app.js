@@ -134,6 +134,7 @@ zh: {
     'models.empty': '暂无模型',
     'models.search': '搜索模型...',
     'models.refreshAll': '刷新所有模型',
+    'models.provider': '绑定供应商',
     'models.copyId': '复制 ID',
     'models.test': '测试',
     'models.testRunning': '测试中...',
@@ -381,6 +382,8 @@ zh: {
     'models.addCustomTitle': '添加自定义模型',
     'models.modelId': '模型 ID',
     'models.modelName': '模型名称',
+    'models.dupId': '该供应商下已存在相同模型 ID：{id}，请换一个',
+    'models.dupName': '该供应商下已存在相同模型名称：{name}，请换一个',
     'models.sourceManual': '手动',
     'models.sourceAuto': '自动',
     'models.delete': '删除模型',
@@ -749,8 +752,11 @@ en: {
     'common.no': 'No',
     'models.addCustom': 'Add Custom Model',
     'models.addCustomTitle': 'Add Custom Model',
+    'models.provider': 'Provider',
     'models.modelId': 'Model ID',
     'models.modelName': 'Model Name',
+    'models.dupId': 'Model ID already exists under this provider: {id}',
+    'models.dupName': 'Model name already exists under this provider: {name}',
     'models.sourceManual': 'Manual',
     'models.sourceAuto': 'Auto',
     'models.delete': 'Delete Model',
@@ -1848,7 +1854,6 @@ function renderProviders() {
             '</div>' +
             '<div class="card-actions">' +
                 '<button class="btn btn-secondary btn-sm" onclick="editProvider(\'' + jsEsc(p.id) + '\')">' + t('providers.edit') + '</button>' +
-                '<button class="btn btn-secondary btn-sm" onclick="addCustomModel(\'' + jsEsc(p.id) + '\')">' + t('models.addCustom') + '</button>' +
                 '<button class="btn btn-secondary btn-sm" onclick="refreshProvider(\'' + jsEsc(p.id) + '\')">' + t('providers.refresh') + '</button>' +
                 '<button class="btn btn-secondary btn-sm" onclick="checkProviderHealth(\'' + jsEsc(p.id) + '\')">' + t('providers.health') + '</button>' +
                 '<button class="btn btn-danger btn-sm" onclick="deleteProvider(\'' + jsEsc(p.id) + '\')">' + t('providers.delete') + '</button>' +
@@ -1859,6 +1864,9 @@ function renderProviders() {
 
 async function deleteProviderModel(providerId, modelId) {
     if (!confirm(t('models.deleteConfirm', {model: modelId}))) return;
+    // 模型管理列表的 id 带 "provider/" 前缀，剥离后才是真实模型 id
+    var prefix = providerId + '/';
+    if (modelId.indexOf(prefix) === 0) modelId = modelId.slice(prefix.length);
     try {
         await api('/admin/providers/' + encodeURIComponent(providerId) +
                   '/models/' + encodeURIComponent(modelId), { method: 'DELETE' });
@@ -1866,23 +1874,29 @@ async function deleteProviderModel(providerId, modelId) {
     } catch (e) { toast(t('models.deleteFail') + ': ' + e.message, 'error'); }
 }
 
-function addCustomModel(providerId) {
-    var provider = providers.find(function(item) { return item.id === providerId; });
-    if (!provider) return;
+function addCustomModel() {
+    var providerOptions = (providers || []).map(function(item) {
+        return '<option value="' + jsEsc(item.id) + '">' + escHtml(item.name) + '</option>';
+    }).join('');
     document.getElementById('modalContent').innerHTML =
         '<h2>' + t('models.addCustomTitle') + '</h2>' +
+        '<div class="form-group"><label>' + t('models.provider') + '</label>' +
+            '<select id="customModelProvider">' + providerOptions + '</select></div>' +
         '<div class="form-group"><label>' + t('models.modelId') + '</label>' +
             '<input type="text" id="customModelId" placeholder="gpt-4o-preview-1120"></div>' +
         '<div class="form-group"><label>' + t('models.modelName') + '</label>' +
             '<input type="text" id="customModelName" placeholder=""></div>' +
         '<div class="modal-actions">' +
             '<button class="btn btn-secondary" onclick="closeModal()">' + t('common.cancel') + '</button>' +
-            '<button class="btn btn-primary" onclick="submitCustomModel(\'' + jsEsc(providerId) + '\')">' + t('common.save') + '</button>' +
+            '<button class="btn btn-primary" onclick="submitCustomModel()">' + t('common.save') + '</button>' +
         '</div>';
     document.getElementById('modal').style.display = 'flex';
 }
 
-async function submitCustomModel(providerId) {
+async function submitCustomModel() {
+    var providerSelect = document.getElementById('customModelProvider');
+    if (!providerSelect || !providerSelect.value) { toast(t('models.provider'), 'error'); return; }
+    var providerId = providerSelect.value;
     var provider = providers.find(function(item) { return item.id === providerId; });
     if (!provider) return;
     var idInput = document.getElementById('customModelId');
@@ -1895,7 +1909,11 @@ async function submitCustomModel(providerId) {
         return { id: m.id, name: m.name, enabled: m.enabled };
     });
     if (existing.some(function(m) { return m.id === modelId; })) {
-        toast(t('models.modelId') + ': ' + modelId, 'error');
+        toast(t('models.dupId', {id: modelId}), 'error');
+        return;
+    }
+    if (existing.some(function(m) { return m.name === modelName; })) {
+        toast(t('models.dupName', {name: modelName}), 'error');
         return;
     }
     existing.push({ id: modelId, name: modelName, enabled: true });
