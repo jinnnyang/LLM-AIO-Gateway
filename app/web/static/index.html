@@ -121,7 +121,10 @@
                         <div class="search-box">
                             <input type="text" id="modelSearch" data-i18n-placeholder="models.search" placeholder="搜索模型..." oninput="filterModels()">
                         </div>
-                        <button class="btn btn-secondary" onclick="refreshAllModels()" data-i18n="models.refreshAll">刷新所有模型</button>
+                        <div class="section-actions" style="margin-left:auto;">
+                            <button class="btn btn-secondary" onclick="addCustomModel()" title="添加自定义模型"><b>+</b> 自定义模型</button>
+                            <button class="btn btn-secondary" onclick="refreshAllModels()" data-i18n="models.refreshAll">刷新所有模型</button>
+                        </div>
                     </div>
                     <div id="modelsList" class="models-list"></div>
                 </div>
@@ -292,7 +295,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=20260805-image-provider-labels"></script>
+    <script src="app.js?v=20260826-delete-fix"></script>
     <script src="js/routing-tools.js"></script>
 </body>
 </html>
