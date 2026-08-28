@@ -55,3 +55,13 @@ Thumbs.db
 htmlcov/
 
 dist/standalone/
+
+# Local verification sandbox (contains real upstream API keys & gateway keys)
+.m4-verify/
+
+# Local dev/debug scripts (target a local sandbox instance, not part of the product)
+tools/m4_*.py
+tools/wsl-test.sh
+
+# Agent skill files (local tooling, not part of the product)
+.claude/

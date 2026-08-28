@@ -1,5 +1,7 @@
+import logging
 import sqlite3
 import json
+import re
 import threading
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -10,6 +12,7 @@ from app.db import fallback as fallback_db
 from app.db import request_logs as request_logs_db
 from app.db import routing as routing_db
 
+logger = logging.getLogger(__name__)
 _lock = threading.Lock()
 _initialized = False
 
@@ -47,6 +50,7 @@ def init_db(path: Optional[str] = None) -> None:
             _migrate_provider_models_source(conn)
             _migrate_request_records_image_generation(conn)
             _migrate_image_generation_stats(conn)
+            _migrate_model_capability_metadata(conn)
             # Routing and fallback policy migrations.
             routing_db.migrate(conn)
             fallback_db.migrate(conn)
@@ -157,10 +161,11 @@ def _migrate_preprocessors(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_provider_models_source(conn: sqlite3.Connection) -> None:
-    """Add the model source column (auto vs manual) for existing databases.
+    """Add the model source column (auto vs custom) for existing databases.
 
     Existing rows default to 'auto' so refresh keeps its historical behaviour
     for everything that was discovered from an upstream /models endpoint.
+    Previously-manual rows (source='manual') are upgraded to 'custom'.
     """
     existing = {row[1] for row in conn.execute("PRAGMA table_info(provider_models)").fetchall()}
     if "source" not in existing:
@@ -168,6 +173,9 @@ def _migrate_provider_models_source(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE provider_models ADD COLUMN source TEXT NOT NULL DEFAULT 'auto'")
         except sqlite3.OperationalError:
             pass
+    else:
+        # Terminology unification: manual -> custom (自定义).
+        conn.execute("UPDATE provider_models SET source = 'custom' WHERE source = 'manual'")
 
 
 def _migrate_provider_force_chat_completions(conn: sqlite3.Connection) -> None:
@@ -273,6 +281,25 @@ def _migrate_image_generation_stats(conn: sqlite3.Connection) -> None:
             )
 
 
+
+def _migrate_model_capability_metadata(conn: sqlite3.Connection) -> None:
+    """Add model capability columns (context_length, prices, modalities) to provider_models if missing.
+    Design: docs/模型能力元数据扩展-设计方案.md §3 / §8 定案 1-3.
+    """
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(provider_models)").fetchall()}
+    columns = {
+        "context_length": "INTEGER",
+        "max_output_tokens": "INTEGER",
+        "input_modalities": "TEXT NOT NULL DEFAULT '[]'",
+        "output_modalities": "TEXT NOT NULL DEFAULT '[]'",
+        "input_price": "REAL",
+        "output_price": "REAL",
+        "cached_input_price": "REAL",
+    }
+    for column, ddl in columns.items():
+        if column not in existing:
+            conn.execute(f"ALTER TABLE provider_models ADD COLUMN {column} {ddl}")
+
 def _ensure_init() -> None:
     if not _initialized:
         init_db()
@@ -361,6 +388,13 @@ CREATE TABLE IF NOT EXISTS provider_models (
     responses_streaming_status TEXT NOT NULL DEFAULT 'unknown',
     responses_tool_types TEXT NOT NULL DEFAULT '[]',
     responses_error TEXT NOT NULL DEFAULT '',
+    context_length INTEGER,
+    max_output_tokens INTEGER,
+    input_modalities TEXT NOT NULL DEFAULT '[]',
+    output_modalities TEXT NOT NULL DEFAULT '[]',
+    input_price REAL,
+    output_price REAL,
+    cached_input_price REAL,
     FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE,
     UNIQUE(provider_id, model_id)
 );
@@ -1203,9 +1237,15 @@ def _model_from_row(row: sqlite3.Row) -> dict:
         "responses_streaming_status": row["responses_streaming_status"] or "unknown",
         "responses_tool_types": _json_loads(row["responses_tool_types"] or "[]") or [],
         "responses_error": row["responses_error"] or "",
+        "context_length": row["context_length"] if "context_length" in row.keys() else None,
+        "max_output_tokens": row["max_output_tokens"] if "max_output_tokens" in row.keys() else None,
+        "input_modalities": _json_loads(row["input_modalities"] if "input_modalities" in row.keys() else "[]") or [],
+        "output_modalities": _json_loads(row["output_modalities"] if "output_modalities" in row.keys() else "[]") or [],
+        "input_price": row["input_price"] if "input_price" in row.keys() else None,
+        "output_price": row["output_price"] if "output_price" in row.keys() else None,
+        "cached_input_price": row["cached_input_price"] if "cached_input_price" in row.keys() else None,
     }
     return model
-
 
 IMAGE_GENERATOR_DEFAULTS = {
     "backend_type": "existing_model", "provider_model": "", "api_base": "",
@@ -1311,7 +1351,7 @@ def set_model_image_generation(model_id: str, enabled: bool) -> bool:
 
 
 def get_model_image_generation(provider_id: str, model: str) -> bool:
-    model_name = parse_model_id(model).model_name
+    model_name = _strip_own_prefix(provider_id, model)
     with get_db() as db:
         row = db.execute("SELECT image_generation FROM provider_models WHERE provider_id = ? AND (model_id IN (?, ?) OR model_name = ?) LIMIT 1", (provider_id, model, model_name, model_name)).fetchone()
         return bool(row and row["image_generation"])
@@ -1340,7 +1380,7 @@ def get_provider(provider_id: str) -> Optional[dict]:
 
 
 def get_model_responses_capability(provider_id: str, model: str) -> dict | None:
-    model_name = parse_model_id(model).model_name
+    model_name = _strip_own_prefix(provider_id, model)
     with get_db() as db:
         row = db.execute(
             "SELECT * FROM provider_models WHERE provider_id = ? AND (model_id IN (?, ?) OR model_name = ?) LIMIT 1",
@@ -1357,7 +1397,7 @@ def set_model_responses_capability(provider_id: str, model: str, *, status: str,
     with get_db() as db:
         db.execute(
             "UPDATE provider_models SET responses_status = ?, responses_checked_at = ?, responses_expires_at = ?, responses_streaming = ?, responses_streaming_status = ?, responses_tool_types = ?, responses_error = ? WHERE provider_id = ? AND (model_id IN (?, ?) OR model_name = ?)",
-            (status, datetime.now(timezone.utc).isoformat(), expires_at, 1 if streaming else 0, streaming_status, json.dumps(tool_types or [], ensure_ascii=False), str(error)[:500], provider_id, model, parse_model_id(model).model_name, parse_model_id(model).model_name),
+            (status, datetime.now(timezone.utc).isoformat(), expires_at, 1 if streaming else 0, streaming_status, json.dumps(tool_types or [], ensure_ascii=False), str(error)[:500], provider_id, model, _strip_own_prefix(provider_id, model), _strip_own_prefix(provider_id, model)),
         )
 
 
@@ -1389,7 +1429,7 @@ def update_model_responses_capability(provider_id: str, model: str, **updates) -
         return
     fields.append("responses_checked_at = ?")
     values.append(datetime.now(timezone.utc).isoformat())
-    model_name = parse_model_id(model).model_name
+    model_name = _strip_own_prefix(provider_id, model)
     with get_db() as db:
         db.execute(
             f"UPDATE provider_models SET {', '.join(fields)} WHERE provider_id = ? AND (model_id IN (?, ?) OR model_name = ?)",
@@ -1400,7 +1440,7 @@ def update_model_responses_capability(provider_id: str, model: str, **updates) -
 def update_model_responses_tool_types(provider_id: str, model: str, tool_types: list[str]) -> None:
     normalized = sorted({str(item) for item in tool_types if item})
     with get_db() as db:
-        db.execute("UPDATE provider_models SET responses_tool_types = ? WHERE provider_id = ? AND (model_id IN (?, ?) OR model_name = ?)", (json.dumps(normalized, ensure_ascii=False), provider_id, model, parse_model_id(model).model_name, parse_model_id(model).model_name))
+        db.execute("UPDATE provider_models SET responses_tool_types = ? WHERE provider_id = ? AND (model_id IN (?, ?) OR model_name = ?)", (json.dumps(normalized, ensure_ascii=False), provider_id, model, _strip_own_prefix(provider_id, model), _strip_own_prefix(provider_id, model)))
 
 
 def add_provider(provider: dict) -> dict:
@@ -1431,7 +1471,7 @@ def add_provider(provider: dict) -> dict:
                     1 if m.get("enabled", True) else 0,
                     m.get("preprocessor", ""),
                     "1" if m.get("image_generation") else "",
-                    "manual",
+                    m.get("source") or "custom",
                 )
             )
     options = _normalize_provider_request_options(provider)
@@ -1452,7 +1492,7 @@ def add_provider(provider: dict) -> dict:
                 "enabled": m.get("enabled", True),
                 "preprocessor": m.get("preprocessor", ""),
                 "image_generation": bool(m.get("image_generation")),
-                "source": "manual",
+                "source": m.get("source") or "custom",
                 "responses_status": "unknown",
                 "responses_checked_at": "",
                 "responses_expires_at": "",
@@ -1504,18 +1544,18 @@ def update_provider(provider_id: str, updates: dict) -> Optional[dict]:
                             "UPDATE provider_models SET model_name = ?, enabled = ?, preprocessor = ? WHERE provider_id = ? AND model_id = ?",
                             (m.get("name", m["id"]), 1 if m.get("enabled", True) else 0, m.get("preprocessor", ""), provider_id, m["id"])
                         )
-                    # Explicit opt-in only: the caller must send source="manual"
+                    # Explicit opt-in only: the caller must send source="custom"
                     # to promote an auto-discovered model. Omitting source keeps
-                    # the stored value, so plain edits never flip auto -> manual.
-                    if m.get("source") == "manual":
+                    # the stored value, so plain edits never flip auto -> custom.
+                    if m.get("source") == "custom":
                         db.execute(
-                            "UPDATE provider_models SET source = 'manual' WHERE provider_id = ? AND model_id = ?",
+                            "UPDATE provider_models SET source = 'custom' WHERE provider_id = ? AND model_id = ?",
                             (provider_id, m["id"])
                         )
                 else:
                     db.execute(
                         "INSERT OR IGNORE INTO provider_models (provider_id, model_id, model_name, enabled, preprocessor, image_generation, source) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (provider_id, m["id"], m.get("name", m["id"]), 1 if m.get("enabled", True) else 0, m.get("preprocessor", ""), "1" if m.get("image_generation") else "", "manual")
+                        (provider_id, m["id"], m.get("name", m["id"]), 1 if m.get("enabled", True) else 0, m.get("preprocessor", ""), "1" if m.get("image_generation") else "", m.get("source") or "custom")
                     )
         if any(key in updates for key in {"api_base", "api_key", "provider_type", "models"}):
             db.execute("UPDATE provider_models SET responses_status = 'unknown', responses_checked_at = '', responses_expires_at = '', responses_streaming = 0, responses_streaming_status = 'unknown', responses_tool_types = '[]', responses_error = '' WHERE provider_id = ?", (provider_id,))
@@ -1538,7 +1578,7 @@ def delete_provider(provider_id: str) -> bool:
 def delete_provider_model(provider_id: str, model_id: str) -> bool:
     """Delete a single model row from a provider.
 
-    Works for both auto-discovered and manually added models: a manual model
+    Works for both auto-discovered and manually added models: a custom model
     is never removed by refresh, so an explicit delete entry point is the only
     way to get rid of one.
     """
@@ -1548,6 +1588,270 @@ def delete_provider_model(provider_id: str, model_id: str) -> bool:
             (provider_id, model_id),
         )
         return cursor.rowcount > 0
+
+
+def _strip_own_prefix(provider_id: str, raw: str) -> str:
+    """Reduce a model id to the bare upstream id stored in provider_models.
+
+    Only this provider's own "<provider_id>/" prefix is addressing syntax and
+    gets removed, and only once. Every remaining slash belongs to the upstream
+    id itself: a provider may serve nested paths such as "des/deepseek", whose
+    full gateway path is "vcp/des/deepseek". parse_model_id() must NOT be used
+    here, because it would read "des" as the provider of a bare "des/deepseek".
+    """
+    value = (raw or "").strip()
+    prefix = f"{provider_id}/"
+    if value.startswith(prefix):
+        value = value[len(prefix):].strip()
+    return value
+
+
+def _rename_wildcard_match(pattern: str, value: str) -> bool:
+    """Local copy of app.core.policy.wildcard_match.
+
+    Duplicated on purpose: app.core.policy imports from this module, so
+    importing it here would create a circular import. Keep the two in sync.
+    """
+    regex = re.escape(pattern).replace(r"\*", ".*")
+    return bool(re.fullmatch(regex, value, re.IGNORECASE))
+
+
+def rename_provider_model(provider_id: str, old_model_id: str, new_model_id: str) -> dict:
+    """Rename a custom model's bare id and cascade the change to referencing config.
+
+    The stored id is always the bare upstream id: the "provider/model" prefix is
+    addressing syntax computed at runtime, never persisted. Callers may pass
+    either form; both are normalized to the bare id here.
+
+    Returns {"ok": True, "model": <row>, "updated": {...}, "warnings": [...]} on
+    success, or {"ok": False, "error": <code>} where error is one of:
+    provider_not_found / model_not_found / auto_model / duplicate_model /
+    invalid_new_id.
+
+    Only exact references are rewritten. Wildcard rules and ambiguous bare-id
+    references that cannot be attributed to this provider are reported in
+    warnings instead of being silently rewritten.
+    """
+    old_bare = _strip_own_prefix(provider_id, old_model_id)
+    new_bare = _strip_own_prefix(provider_id, new_model_id)
+    if not new_bare:
+        return {"ok": False, "error": "invalid_new_id"}
+
+    with get_db() as db:
+        if not db.execute("SELECT 1 FROM providers WHERE id = ?", (provider_id,)).fetchone():
+            return {"ok": False, "error": "provider_not_found"}
+        # A bare id may legitimately contain slashes ("des/deepseek"), so a
+        # leading segment is only rejected when it actually names another
+        # provider -- there the intent is ambiguous between "nested upstream
+        # path" and "move to that provider", and guessing either way is wrong.
+        if "/" in new_bare:
+            head = new_bare.split("/", 1)[0]
+            if head != provider_id and db.execute(
+                "SELECT 1 FROM providers WHERE id = ?", (head,)
+            ).fetchone():
+                return {"ok": False, "error": "foreign_provider_prefix"}
+        row = db.execute(
+            "SELECT * FROM provider_models WHERE provider_id = ? AND model_id = ?",
+            (provider_id, old_bare),
+        ).fetchone()
+        if not row:
+            return {"ok": False, "error": "model_not_found"}
+        if (row["source"] or "custom") != "custom":
+            return {"ok": False, "error": "auto_model"}
+        if new_bare == old_bare:
+            return {"ok": True, "model": _model_from_row(row), "updated": {}, "warnings": []}
+        if db.execute(
+            "SELECT 1 FROM provider_models WHERE provider_id = ? AND model_id = ?",
+            (provider_id, new_bare),
+        ).fetchone():
+            return {"ok": False, "error": "duplicate_model"}
+
+        old_composite = f"{provider_id}/{old_bare}"
+        new_composite = f"{provider_id}/{new_bare}"
+        warnings: list[dict] = []
+        updated: dict[str, int] = {}
+
+        # A bare reference is only attributable to this provider when no other
+        # provider exposes the same bare id. Otherwise rewriting it would
+        # silently repoint another provider's traffic.
+        shared = db.execute(
+            "SELECT provider_id FROM provider_models WHERE model_id = ? AND provider_id != ?",
+            (old_bare, provider_id),
+        ).fetchall()
+        bare_is_ambiguous = bool(shared)
+        if bare_is_ambiguous:
+            warnings.append({
+                "kind": "ambiguous_bare_id",
+                "model_id": old_bare,
+                "providers": [r["provider_id"] for r in shared],
+            })
+
+        def _forms() -> list[str]:
+            return [old_composite] if bare_is_ambiguous else [old_composite, old_bare]
+
+        def _rewrite(value: str) -> str:
+            if value == old_composite:
+                return new_composite
+            if value == old_bare and not bare_is_ambiguous:
+                return new_bare
+            return value
+
+        def _bump(field: str, n: int) -> None:
+            if n:
+                updated[field] = updated.get(field, 0) + n
+
+        # 1. the model row itself; a display name left at its default follows
+        if (row["model_name"] or "") in ("", old_bare, old_composite):
+            db.execute(
+                "UPDATE provider_models SET model_id = ?, model_name = ? WHERE provider_id = ? AND model_id = ?",
+                (new_bare, new_bare, provider_id, old_bare),
+            )
+        else:
+            db.execute(
+                "UPDATE provider_models SET model_id = ? WHERE provider_id = ? AND model_id = ?",
+                (new_bare, provider_id, old_bare),
+            )
+
+        # 2. routing rules: exact match_model / target_model
+        for rule in db.execute(
+            "SELECT id, name, match_model, target_model, target_provider FROM routing_rules"
+        ).fetchall():
+            for field in ("match_model", "target_model"):
+                current = rule[field] or ""
+                if current in _forms():
+                    db.execute(
+                        f"UPDATE routing_rules SET {field} = ? WHERE id = ?",
+                        (_rewrite(current), rule["id"]),
+                    )
+                    _bump(f"routing_rules.{field}", 1)
+                elif "*" in current and _rename_wildcard_match(current, old_bare) \
+                        and not _rename_wildcard_match(current, new_bare):
+                    warnings.append({
+                        "kind": "wildcard_no_longer_matches",
+                        "table": "routing_rules",
+                        "field": field,
+                        "id": rule["id"],
+                        "name": rule["name"] or rule["id"],
+                        "pattern": current,
+                    })
+
+        # 3. fallback policies: match_model plus every chain target
+        for pol in db.execute(
+            "SELECT id, name, match_model, chain FROM fallback_policies"
+        ).fetchall():
+            current = pol["match_model"] or ""
+            if current in _forms():
+                db.execute(
+                    "UPDATE fallback_policies SET match_model = ? WHERE id = ?",
+                    (_rewrite(current), pol["id"]),
+                )
+                _bump("fallback_policies.match_model", 1)
+            elif "*" in current and _rename_wildcard_match(current, old_bare) \
+                    and not _rename_wildcard_match(current, new_bare):
+                warnings.append({
+                    "kind": "wildcard_no_longer_matches",
+                    "table": "fallback_policies",
+                    "field": "match_model",
+                    "id": pol["id"],
+                    "name": pol["name"] or pol["id"],
+                    "pattern": current,
+                })
+
+            chain = _json_loads(pol["chain"] or "[]")
+            if isinstance(chain, list):
+                touched = False
+                new_chain = []
+                for item in chain:
+                    if isinstance(item, str) and item in _forms():
+                        new_chain.append(_rewrite(item))
+                        touched = True
+                    elif isinstance(item, dict):
+                        entry = dict(item)
+                        for field in ("model", "target_model"):
+                            if entry.get(field) in _forms():
+                                entry[field] = _rewrite(entry[field])
+                                touched = True
+                        new_chain.append(entry)
+                    else:
+                        new_chain.append(item)
+                if touched:
+                    db.execute(
+                        "UPDATE fallback_policies SET chain = ? WHERE id = ?",
+                        (json.dumps(new_chain, ensure_ascii=False), pol["id"]),
+                    )
+                    _bump("fallback_policies.chain", 1)
+
+        # 4. image generators: provider_model is a gateway reference.
+        # image_generators.model / preprocessors.model are NOT: they address a
+        # separate upstream endpoint that carries its own api_base and api_key.
+        for gen in db.execute(
+            "SELECT id, provider_model FROM image_generators"
+        ).fetchall():
+            current = gen["provider_model"] or ""
+            if current in _forms():
+                db.execute(
+                    "UPDATE image_generators SET provider_model = ? WHERE id = ?",
+                    (_rewrite(current), gen["id"]),
+                )
+                _bump("image_generators.provider_model", 1)
+
+        # 5. api key allow lists
+        for kr in db.execute("SELECT key, allowed_models FROM user_api_keys").fetchall():
+            allowed = _json_loads(kr["allowed_models"] or '["*"]')
+            if not isinstance(allowed, list):
+                continue
+            touched = False
+            new_allowed = []
+            for entry in allowed:
+                if isinstance(entry, str) and entry in _forms():
+                    new_allowed.append(_rewrite(entry))
+                    touched = True
+                else:
+                    new_allowed.append(entry)
+            if touched:
+                db.execute(
+                    "UPDATE user_api_keys SET allowed_models = ? WHERE key = ?",
+                    (json.dumps(new_allowed, ensure_ascii=False), kr["key"]),
+                )
+                _bump("user_api_keys.allowed_models", 1)
+
+        # Cached Responses-API probe results belong to the old upstream id.
+        db.execute(
+            "UPDATE provider_models SET responses_status = 'unknown', responses_checked_at = '',"
+            " responses_expires_at = '', responses_streaming = 0,"
+            " responses_streaming_status = 'unknown', responses_tool_types = '[]',"
+            " responses_error = '' WHERE provider_id = ? AND model_id = ?",
+            (provider_id, new_bare),
+        )
+
+        fresh = db.execute(
+            "SELECT * FROM provider_models WHERE provider_id = ? AND model_id = ?",
+            (provider_id, new_bare),
+        ).fetchone()
+        result = {
+            "ok": True,
+            "model": _model_from_row(fresh),
+            "updated": updated,
+            "warnings": warnings,
+        }
+
+    # Resolved-metadata cache entries are keyed by upstream model id, so the old
+    # key now points at a model that no longer exists and the new key may hold a
+    # stale miss from before the rename. Invalidated after the transaction
+    # commits: a rolled-back rename must not drop live cache entries.
+    # Imported locally because app.services.model_metadata imports this module.
+    try:
+        from app.services.model_metadata import invalidate_model_cache
+
+        invalidate_model_cache(provider_id, old_bare)
+        invalidate_model_cache(provider_id, new_bare)
+    except Exception as exc:
+        # A cache miss is recoverable; a failed rename response is not.
+        logger.warning("metadata cache invalidation after rename failed: %s", exc)
+
+    return result
+
+
 
 
 class ModelId:
