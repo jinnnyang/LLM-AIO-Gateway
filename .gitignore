@@ -65,3 +65,6 @@ tools/wsl-test.sh
 
 # Agent skill files (local tooling, not part of the product)
 .claude/
+
+# Scratch file for `git commit -F` (must live in-repo: absolute temp paths fail on Windows)
+.commitmsg.txt
