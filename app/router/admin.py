@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Header
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from app.database import (
-    get_providers, get_provider, add_provider, update_provider, delete_provider, delete_provider_model,
+    get_providers, get_provider, add_provider, update_provider, delete_provider, delete_provider_model, rename_provider_model, get_db,
     get_users, get_user, add_user, update_user, delete_user,
     add_user_api_key, update_user_api_key, delete_user_api_key,
     get_routing_rules, get_routing_rule, add_routing_rule, update_routing_rule, delete_routing_rule,
@@ -39,7 +39,7 @@ from app.database import (
     delete_request_log as db_delete_request_log, clear_request_logs,
 )
 from app.services.logger import available_log_channels, get_logger, list_log_dates, read_log_entries
-from app.models import ProviderCreate, ProviderUpdate, StatsResponse
+from app.models import ProviderCreate, ProviderUpdate, ModelInfo, StatsResponse
 
 router = APIRouter()
 _app_log = get_logger("app")
@@ -80,7 +80,7 @@ async def delete_provider_endpoint(provider_id: str, authorization: Optional[str
     return {"status": "deleted", "provider_id": provider_id}
 
 
-@router.delete("/providers/{provider_id}/models/{model_id}")
+@router.delete("/providers/{provider_id}/models/{model_id:path}")
 async def delete_provider_model_endpoint(provider_id: str, model_id: str, authorization: Optional[str] = Header(None)):
     await require_admin_session(authorization)
     if not get_provider(provider_id):
@@ -88,6 +88,216 @@ async def delete_provider_model_endpoint(provider_id: str, model_id: str, author
     if not delete_provider_model(provider_id, model_id):
         raise HTTPException(status_code=404, detail="Model not found")
     return {"status": "deleted", "provider_id": provider_id, "model_id": model_id}
+
+
+@router.put("/providers/{provider_id}/models/rename")
+async def rename_provider_model_by_body(
+    provider_id: str,
+    body: dict,
+    authorization: Optional[str] = Header(None),
+):
+    """Rename a model whose current id is supplied in the body, not the path.
+
+    Required for upstream ids that contain slashes ("des/deepseek"): percent
+    encoding does not help, because the ASGI server decodes %2F before route
+    matching, so such an id splits into extra path segments and the request
+    fails with 405. Keeping the old id out of the path is the only reliable
+    way to address those models.
+    """
+    old_id = body.get("old_model_id") or body.get("model_id") or ""
+    if not isinstance(old_id, str) or not old_id.strip():
+        raise HTTPException(status_code=400, detail="old_model_id is required")
+    return await rename_provider_model_endpoint(
+        provider_id=provider_id,
+        model_id=old_id.strip(),
+        body={"new_model_id": body.get("new_model_id") or ""},
+        authorization=authorization,
+    )
+
+
+@router.put("/providers/{provider_id}/models/{model_id}/rename")
+async def rename_provider_model_endpoint(
+    provider_id: str,
+    model_id: str,
+    body: dict,
+    authorization: Optional[str] = Header(None),
+):
+    """Rename a custom model's upstream id and cascade the change to config.
+
+    The id that changes is the bare upstream id — the one sent to the provider.
+    The "provider/model" prefix seen in the UI is addressing syntax derived from
+    the provider id at runtime, so it is never affected by a model rename.
+
+    Auto-discovered rows are rejected with 400: refresh owns their ids and would
+    recreate the old one. Promote the row to source="custom" first.
+
+    Returns the updated row plus `updated` (per-column cascade counts) and
+    `warnings` — references that intentionally were NOT rewritten, namely
+    wildcard rules that no longer match and bare ids shared with another
+    provider (rewriting those would repoint someone else's traffic).
+    """
+    await require_admin_session(authorization)
+
+    new_id = body.get("new_model_id") or body.get("model_id") or ""
+    if not isinstance(new_id, str) or not new_id.strip():
+        raise HTTPException(status_code=400, detail="new_model_id is required")
+
+    result = rename_provider_model(provider_id, model_id, new_id.strip())
+    if not result.get("ok"):
+        error = result.get("error")
+        if error == "provider_not_found":
+            raise HTTPException(status_code=404, detail="Provider not found")
+        if error == "model_not_found":
+            raise HTTPException(status_code=404, detail="Model not found")
+        if error == "auto_model":
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot rename an auto-discovered model. Promote it to a custom model first.",
+            )
+        if error == "duplicate_model":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Model '{new_id.strip()}' already exists for this provider",
+            )
+        if error == "invalid_new_id":
+            raise HTTPException(
+                status_code=400,
+                detail="new_model_id must not be empty",
+            )
+        if error == "foreign_provider_prefix":
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "new_model_id starts with another provider's id; a rename "
+                    "cannot move a model to a different provider"
+                ),
+            )
+        raise HTTPException(status_code=400, detail="Rename failed")
+
+    return {
+        "status": "renamed",
+        "provider_id": provider_id,
+        "old_model_id": model_id,
+        "model": result.get("model"),
+        "updated": result.get("updated") or {},
+        "warnings": result.get("warnings") or [],
+    }
+
+
+
+# ── M4: capability metadata endpoints ─────────────────────────────────────────
+
+_CAPABILITY_FIELDS = (
+    "context_length",
+    "max_output_tokens",
+    "input_modalities",
+    "output_modalities",
+    "input_price",
+    "output_price",
+    "cached_input_price",
+)
+
+
+def _find_model(provider_id: str, model_id: str) -> dict:
+    """Return the model dict, raising 404 for unknown provider or model."""
+    provider = get_provider(provider_id)
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    for model in provider.get("models", []):
+        if model["id"] == model_id:
+            return model
+    raise HTTPException(status_code=404, detail="Model not found")
+
+
+@router.get("/providers/{provider_id}/models/{model_id:path}/metadata-candidates")
+async def metadata_candidates(provider_id: str, model_id: str, authorization: Optional[str] = Header(None)):
+    """Read-only: return resolved candidate metadata alongside current values.
+
+    Design §4.3: 只返回候选值与「将被覆盖的现有值」供前端 diff, 不写库.
+    """
+    await require_admin_session(authorization)
+    model = _find_model(provider_id, model_id)
+
+    # Imported lazily and referenced through the module so tests can monkeypatch
+    # `model_metadata.resolve_model_metadata` after this router is imported.
+    from app.services import model_metadata as mm
+
+    try:
+        candidates = mm.resolve_model_metadata(provider_id, model_id) or {}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Metadata resolution failed: {exc}")
+
+    current = {field: model.get(field) for field in _CAPABILITY_FIELDS}
+    return {
+        "provider_id": provider_id,
+        "model_id": model_id,
+        "candidates": {field: candidates.get(field) for field in _CAPABILITY_FIELDS},
+        "current": current,
+    }
+
+
+@router.put("/providers/{provider_id}/models/{model_id:path}/capabilities")
+async def update_model_capabilities(provider_id: str, model_id: str, body: dict, authorization: Optional[str] = Header(None)):
+    """Write capability metadata for any model (custom or auto).
+
+    Both custom and auto rows are editable; auto rows simply get their values
+    overwritten again by the next upstream refresh (refresh owns the source).
+
+    Design §4.4:
+    - Only keys present in the body are touched (按键存在才写), so a partial PUT
+      never clears the omitted fields.
+    - `mode='fill_empty'` is a backend guard: it fills NULL columns only and
+      never overwrites a value the user already set.
+    """
+    await require_admin_session(authorization)
+
+    mode = body.get("mode") or "overwrite"
+    if mode not in ("overwrite", "fill_empty"):
+        raise HTTPException(status_code=400, detail="mode must be 'overwrite' or 'fill_empty'")
+
+    # Only keys the client actually sent are candidates for a write.
+    incoming = {field: body[field] for field in _CAPABILITY_FIELDS if field in body}
+    if not incoming:
+        return {"status": "noop", "provider_id": provider_id, "model_id": model_id, "updated": []}
+
+    with get_db() as db:
+        row = db.execute(
+            "SELECT * FROM provider_models WHERE provider_id = ? AND model_id = ?",
+            (provider_id, model_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Model not found")
+
+        assignments = []
+        values = []
+        for field, value in incoming.items():
+            if mode == "fill_empty":
+                stored = row[field] if field in row.keys() else None
+                # Modality columns hold JSON text; '[]' and '' both count as empty.
+                if field.endswith("_modalities"):
+                    if stored not in (None, "", "[]"):
+                        continue
+                elif stored is not None:
+                    continue
+            assignments.append(f"{field} = ?")
+            values.append(json.dumps(value) if field.endswith("_modalities") else value)
+
+        if not assignments:
+            return {"status": "noop", "provider_id": provider_id, "model_id": model_id, "updated": []}
+
+        db.execute(
+            f"UPDATE provider_models SET {', '.join(assignments)} "
+            "WHERE provider_id = ? AND model_id = ?",
+            (*values, provider_id, model_id),
+        )
+
+    return {
+        "status": "updated",
+        "provider_id": provider_id,
+        "model_id": model_id,
+        "mode": mode,
+        "updated": [a.split(" = ")[0] for a in assignments],
+    }
 
 
 @router.post("/providers/{provider_id}/refresh")

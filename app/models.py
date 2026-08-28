@@ -1,14 +1,22 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 
+
 class ModelInfo(BaseModel):
     # Hidden/preview upstream model ids can contain '/', ':', '@' and spaces,
     # so only forbid control characters instead of allowlisting a narrow set.
     id: str = Field(min_length=1, max_length=200, pattern=r"^[^\x00-\x1f]+$")
     name: str
     enabled: bool = True
-    source: Optional[str] = Field(default=None, pattern="^(auto|manual)$")
-
+    source: Optional[str] = Field(default=None, pattern="^(auto|custom)$")
+    # M4: capability metadata fields
+    context_length: Optional[int] = None
+    max_output_tokens: Optional[int] = None
+    input_modalities: list[str] = Field(default_factory=list)
+    output_modalities: list[str] = Field(default_factory=list)
+    input_price: Optional[float] = None
+    output_price: Optional[float] = None
+    cached_input_price: Optional[float] = None
 class ProviderBase(BaseModel):
     id: str = Field(pattern=r"^[a-zA-Z0-9._-]+$")
     name: str
