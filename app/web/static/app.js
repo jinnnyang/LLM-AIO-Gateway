@@ -381,17 +381,49 @@ zh: {
     'models.addCustom': '添加自定义模型',
     'models.addCustomTitle': '添加自定义模型',
     'models.modelId': '模型 ID',
+    'models.idPrefixHint': '前缀由供应商 ID 决定，不属于模型 ID 本身，无法在此修改。右侧填写上游真实 ID，可以包含斜杠（如 des/deepseek）',
+    'models.idEditHint': '此处填写发送给上游供应商的原始模型 ID（不含供应商前缀）。上游本身带路径的 ID 可直接填斜杠形式，如 des/deepseek。自动发现的模型需先勾选下方“转为自定义模型”才能修改。',
+    'models.idRequired': '模型 ID 不能为空',
+    'models.idForeignPrefix': '模型 ID 不能以其他供应商的 ID「{provider}」开头；改名不能把模型移动到别的供应商',
+    'models.renameConfirm': '确认将模型 ID 从 {from} 改为 {to}？\n\n路由规则、降级策略、图像生成器和 API Key 白名单中对该模型的精确引用会同步更新。历史请求日志保持原样。',
+    'models.renamed': '模型 ID 已从 {from} 改为 {to}',
+    'models.renameWildcardWarn': '注意：有 {n} 条通配规则原先能匹配旧 ID，但匹配不到新 ID，请手动检查：{rules}',
+    'models.renameAmbiguousWarn': '注意：其他供应商（{providers}）也有同名模型，配置中不带前缀的引用无法判定归属，未做修改，请手动检查',
+
     'models.modelName': '模型名称',
     'models.dupId': '该供应商下已存在相同模型 ID：{id}，请换一个',
     'models.dupName': '该供应商下已存在相同模型名称：{name}，请换一个',
-    'models.sourceManual': '手动',
+    'models.sourceCustom': '自定义',
     'models.sourceAuto': '自动',
     'models.delete': '删除模型',
     'models.deleteConfirm': '确定要删除模型 {model} 吗？',
     'models.deleteFail': '删除模型失败',
-    'models.makeManual': '转为手动（不会被刷新删除）',
+    'models.makeCustom': '转为自定义模型（不受刷新影响）',
     'models.editModel': '编辑模型',
     'models.saveEdit': '保存',
+    'models.capabilityTab': '能力参数',
+    'models.syncMetadata': '自动获取参数',
+    'models.syncSuccess': '已填入 {n} 项参数',
+    'models.syncNoCandidates': '未找到该模型的参数',
+    'models.syncAllFilled': '已获取 {n} 项参数，但这些字段都已有值；勾选「覆盖已有参数」才会替换',
+    'models.syncFail': '同步失败',
+    'models.candidateBadge': '自动填充',
+    'models.contextLength': '上下文长度 (tokens)',
+    'models.maxOutputTokens': '最大输出 (tokens)',
+    'models.inputModalities': '输入模态',
+    'models.outputModalities': '输出模态',
+    'models.inputPrice': '输入价格 ($/M token)',
+    'models.outputPrice': '输出价格 ($/M token)',
+    'models.cachedInputPrice': '缓存输入价格 ($/M token)',
+    'models.overwriteAll': '覆盖已有参数（用自动获取的值替换手填值）',
+    'models.metadataConfirm': '将写入 {n} 项能力参数，确定保存？',
+    'models.metadataSaved': '能力参数已保存',
+    'models.modality.text': '文本',
+    'models.modality.vision': '视觉',
+    'models.modality.video': '视频',
+    'models.modality.audio': '音频',
+    'models.modality.image': '图片',
+    'models.modality.embedding': '向量',
 },
 
 en: {
@@ -754,17 +786,49 @@ en: {
     'models.addCustomTitle': 'Add Custom Model',
     'models.provider': 'Provider',
     'models.modelId': 'Model ID',
+    'models.idPrefixHint': 'The prefix comes from the provider id and is not part of the model id, so it cannot be edited here. The field on the right takes the real upstream id, which may contain slashes (e.g. des/deepseek)',
+    'models.idEditHint': 'This is the raw model id sent to the upstream provider (without the provider prefix). Upstream ids that are themselves paths can be entered with slashes, e.g. des/deepseek. For auto-discovered models, tick "Convert to custom model" below first.',
+    'models.idRequired': 'Model ID cannot be empty',
+    'models.idForeignPrefix': 'Model ID cannot start with another provider id ("{provider}"); a rename cannot move a model to a different provider',
+    'models.renameConfirm': 'Rename model ID from {from} to {to}?\n\nExact references in routing rules, fallback policies, image generators and API key allow lists will be updated. Historical request logs are left untouched.',
+    'models.renamed': 'Model ID renamed from {from} to {to}',
+    'models.renameWildcardWarn': 'Note: {n} wildcard rule(s) matched the old ID but do not match the new one. Please review: {rules}',
+    'models.renameAmbiguousWarn': 'Note: other provider(s) ({providers}) expose a model with the same id, so unprefixed references could not be attributed and were left unchanged. Please review them.',
+
     'models.modelName': 'Model Name',
     'models.dupId': 'Model ID already exists under this provider: {id}',
     'models.dupName': 'Model name already exists under this provider: {name}',
-    'models.sourceManual': 'Manual',
+    'models.sourceCustom': 'Custom',
     'models.sourceAuto': 'Auto',
     'models.delete': 'Delete Model',
     'models.deleteConfirm': 'Delete model {model}?',
     'models.deleteFail': 'Failed to delete model',
-    'models.makeManual': 'Make manual (survives refresh)',
+    'models.makeCustom': 'Make custom (survives refresh)',
     'models.editModel': 'Edit Model',
     'models.saveEdit': 'Save',
+    'models.capabilityTab': 'Capabilities',
+    'models.syncMetadata': 'Fetch parameters',
+    'models.syncSuccess': 'Filled {n} parameters',
+    'models.syncNoCandidates': 'No parameters found for this model',
+    'models.syncAllFilled': 'Fetched {n} parameters, but these fields already have values; tick "Overwrite existing" to replace them',
+    'models.syncFail': 'Sync failed',
+    'models.candidateBadge': 'auto-filled',
+    'models.contextLength': 'Context length (tokens)',
+    'models.maxOutputTokens': 'Max output (tokens)',
+    'models.inputModalities': 'Input modalities',
+    'models.outputModalities': 'Output modalities',
+    'models.inputPrice': 'Input price ($/M token)',
+    'models.outputPrice': 'Output price ($/M token)',
+    'models.cachedInputPrice': 'Cached input price ($/M token)',
+    'models.overwriteAll': 'Overwrite existing (replace manual values)',
+    'models.metadataConfirm': 'Write {n} capability fields. Save?',
+    'models.metadataSaved': 'Capabilities saved',
+    'models.modality.text': 'Text',
+    'models.modality.vision': 'Vision',
+    'models.modality.video': 'Video',
+    'models.modality.audio': 'Audio',
+    'models.modality.image': 'Image',
+    'models.modality.embedding': 'Embedding',
 }
 };
 
@@ -1928,50 +1992,315 @@ async function submitCustomModel() {
     } catch (e) { toast(t('providers.updateFail') + ': ' + e.message, 'error'); }
 }
 
+// ===== M4: capability metadata (能力参数) =====
+// Module-level state driving the capability block in the model edit modal.
+// Backend field names mirror _CAPABILITY_FIELDS in app/router/admin.py.
+var METADATA_MODALITIES = ['text', 'vision', 'video', 'audio', 'image', 'embedding'];
+var METADATA_FIELD_KEYS = [
+    'context_length', 'max_output_tokens', 'input_modalities', 'output_modalities',
+    'input_price', 'output_price', 'cached_input_price'
+];
+
+var metadataState = {
+    context: null,
+    maxOutputTokens: null,
+    inputModalities: [],
+    outputModalities: [],
+    prices: { input: null, output: null, cachedInput: null },
+    candidate: {},   // backend field key -> value applied from sync (for badge)
+    overwriteAll: false
+};
+
+function metadataFieldEmpty(backendKey) {
+    switch (backendKey) {
+        case 'context_length': return metadataState.context == null;
+        case 'max_output_tokens': return metadataState.maxOutputTokens == null;
+        case 'input_modalities': return !metadataState.inputModalities.length;
+        case 'output_modalities': return !metadataState.outputModalities.length;
+        case 'input_price': return metadataState.prices.input == null;
+        case 'output_price': return metadataState.prices.output == null;
+        case 'cached_input_price': return metadataState.prices.cachedInput == null;
+    }
+    return true;
+}
+
+function metadataFieldSet(backendKey, v) {
+    switch (backendKey) {
+        case 'context_length': metadataState.context = v; break;
+        case 'max_output_tokens': metadataState.maxOutputTokens = v; break;
+        case 'input_modalities': metadataState.inputModalities = v.slice(); break;
+        case 'output_modalities': metadataState.outputModalities = v.slice(); break;
+        case 'input_price': metadataState.prices.input = v; break;
+        case 'output_price': metadataState.prices.output = v; break;
+        case 'cached_input_price': metadataState.prices.cachedInput = v; break;
+    }
+}
+
+function metadataBadge(backendKey) {
+    // "自动填充" badge marks a field filled by auto-fetch (design §5.1).
+    if (metadataState.candidate[backendKey] === undefined) return '';
+    return ' <span class="candidate-badge">' + escHtml(t('models.candidateBadge')) + '</span>';
+}
+
+function renderMetadataTab() {
+    var el = document.getElementById('metadataTab');
+    if (!el) return;
+    // Both custom and auto models are editable; auto rows just get their
+    // values overwritten again by the next upstream refresh.
+    var editable = true;
+    var ro = '';
+    var html = '';
+
+    function numField(id, label, val, backendKey) {
+        var v = (val == null) ? '' : val;
+        return '<div class="form-group"><label>' + escHtml(label) + metadataBadge(backendKey) + '</label>' +
+            '<input type="number" step="any" id="meta_' + id + '" value="' + escHtml(String(v)) + '"' + ro + '></div>';
+    }
+
+    function chips(id, label, selected, backendKey) {
+        var h = '<div class="form-group"><label>' + escHtml(label) + metadataBadge(backendKey) + '</label>' +
+            '<div class="modality-chips" data-field="' + id + '">';
+        for (var i = 0; i < METADATA_MODALITIES.length; i++) {
+            var mod = METADATA_MODALITIES[i];
+            var active = selected.indexOf(mod) !== -1;
+            h += '<button type="button" class="chip' + (active ? ' active' : '') + '" data-value="' + mod + '"' +
+                (editable ? '' : ' disabled') + '>' + escHtml(t('models.modality.' + mod)) + '</button>';
+        }
+        return h + '</div></div>';
+    }
+
+    html += numField('context', t('models.contextLength'), metadataState.context, 'context_length');
+    html += numField('maxOutputTokens', t('models.maxOutputTokens'), metadataState.maxOutputTokens, 'max_output_tokens');
+    html += chips('inputModalities', t('models.inputModalities'), metadataState.inputModalities, 'input_modalities');
+    html += chips('outputModalities', t('models.outputModalities'), metadataState.outputModalities, 'output_modalities');
+    html += numField('inputPrice', t('models.inputPrice'), metadataState.prices.input, 'input_price');
+    html += numField('outputPrice', t('models.outputPrice'), metadataState.prices.output, 'output_price');
+    html += numField('cachedInputPrice', t('models.cachedInputPrice'), metadataState.prices.cachedInput, 'cached_input_price');
+    el.innerHTML = html;
+}
+
+function setupMetadataChips() {
+    // Container-level event delegation so re-renders never drop focus (design §5.1).
+    var el = document.getElementById('metadataTab');
+    if (!el) return;
+    el.addEventListener('click', function(e) {
+        var chip = e.target.closest ? e.target.closest('.chip') : null;
+        if (!chip || chip.disabled) return;
+        var field = chip.parentNode.getAttribute('data-field');
+        if (!field) return;
+        var val = chip.getAttribute('data-value');
+        var arr = (field === 'inputModalities') ? metadataState.inputModalities : metadataState.outputModalities;
+        var idx = arr.indexOf(val);
+        if (idx === -1) arr.push(val); else arr.splice(idx, 1);
+        chip.classList.toggle('active');
+    });
+}
+
+async function syncMetadata(providerId, modelId) {
+    // Pull candidates, fill-empty merge into metadataState, re-render with
+    // "自动填充" badges. Writes nothing to the DB.
+    var bareId = modelId.indexOf(providerId + '/') === 0 ? modelId.substring(providerId.length + 1) : modelId;
+    var btn = document.getElementById('metadataSyncBtn');
+    if (btn) btn.disabled = true;
+    try {
+        var data = await api('/admin/providers/' + encodeURIComponent(providerId) +
+            '/models/' + encodeURIComponent(bareId) + '/metadata-candidates');
+        var cand = data.candidates || {};
+        var applied = {};
+        var offered = 0;
+        for (var i = 0; i < METADATA_FIELD_KEYS.length; i++) {
+            var k = METADATA_FIELD_KEYS[i];
+            var v = cand[k];
+            if (v == null || v === '' || (Array.isArray(v) && !v.length)) continue;
+            offered++;
+            if (metadataState.overwriteAll || metadataFieldEmpty(k)) {
+                metadataFieldSet(k, v);
+                applied[k] = v;
+            }
+        }
+        metadataState.candidate = applied;
+        renderMetadataTab();
+        if (btn) btn.disabled = false;
+        var n = Object.keys(applied).length;
+        if (n) toast(t('models.syncSuccess', { n: n }));
+        else if (offered) toast(t('models.syncAllFilled', { n: offered }), 'info');
+        else toast(t('models.syncNoCandidates'), 'error');
+    } catch (e) {
+        if (btn) btn.disabled = false;
+        toast(t('models.syncFail') + ': ' + e.message, 'error');
+    }
+}
+
+function metadataCapabilityBody() {
+    // Build PUT capabilities body from the live DOM + metadataState, skipping
+    // empty fields so a partial write never clears values left untouched.
+    var body = {};
+    var readNum = function(id) {
+        var input = document.getElementById('meta_' + id);
+        if (!input || input.value === '') return null;
+        var n = Number(input.value);
+        return isNaN(n) ? null : n;
+    };
+    var ctx = readNum('context');
+    var mxt = readNum('maxOutputTokens');
+    if (ctx != null) body.context_length = ctx;
+    if (mxt != null) body.max_output_tokens = mxt;
+    if (metadataState.inputModalities.length) body.input_modalities = metadataState.inputModalities.slice();
+    if (metadataState.outputModalities.length) body.output_modalities = metadataState.outputModalities.slice();
+    var ip = readNum('inputPrice');
+    var op = readNum('outputPrice');
+    var cp = readNum('cachedInputPrice');
+    if (ip != null) body.input_price = ip;
+    if (op != null) body.output_price = op;
+    if (cp != null) body.cached_input_price = cp;
+    return body;
+}
+
 function editModel(providerId, modelId) {
+    // modelId comes from the UI list as "provider/model" (e.g. "demo/gpt-4o").
+    // Internal provider.models entries use bare ids, so derive the bare form.
+    var bareId = modelId.indexOf(providerId + '/') === 0 ? modelId.substring(providerId.length + 1) : modelId;
     var m = models.find(function(item) { return item.id === modelId && item.provider === providerId; });
     if (!m) return;
-    var isManual = m.source === 'manual';
-    var checkbox = '<label><input type="checkbox" id="modelMakeManual" value="1"' +
-        (isManual ? ' checked disabled' : '') + '> ' + t('models.makeManual') + '</label>';
+    var isCustom = m.source === 'custom';
+
+    // Capability current values come from the providers list (get_providers
+    // serializes them, /admin/models does not).
+    var prov = providers.find(function(p) { return p.id === providerId; });
+    var pm = null;
+    if (prov && prov.models) {
+        for (var i = 0; i < prov.models.length; i++) {
+            if (prov.models[i].id === bareId) { pm = prov.models[i]; break; }
+        }
+    }
+    pm = pm || {};
+    metadataState = {
+        context: (pm.context_length != null) ? pm.context_length : null,
+        maxOutputTokens: (pm.max_output_tokens != null) ? pm.max_output_tokens : null,
+        inputModalities: pm.input_modalities || [],
+        outputModalities: pm.output_modalities || [],
+        prices: {
+            input: (pm.input_price != null) ? pm.input_price : null,
+            output: (pm.output_price != null) ? pm.output_price : null,
+            cachedInput: (pm.cached_input_price != null) ? pm.cached_input_price : null
+        },
+        candidate: {},
+        overwriteAll: false
+    };
+
+    var checkbox = '<label><input type="checkbox" id="modelMakeCustom" value="1"' +
+        (isCustom ? ' checked disabled' : '') + '> ' + t('models.makeCustom') + '</label>';
+    var syncBtn = '<button type="button" class="btn btn-secondary btn-sm" id="metadataSyncBtn" onclick="syncMetadata(\'' +
+            jsEsc(providerId) + '\', \'' + jsEsc(modelId) + '\')">' + t('models.syncMetadata') + '</button>';
+    var overwrite = '<label class="metadata-overwrite"><input type="checkbox" id="metadataOverwriteAll"> ' +
+            escHtml(t('models.overwriteAll')) + '</label>';
+
     document.getElementById('modalContent').innerHTML =
         '<h2>' + t('models.editModel') + '</h2>' +
         '<div class="form-group"><label>' + t('models.modelId') + '</label>' +
-            '<input type="text" value="' + escHtml(modelId) + '" disabled></div>' +
+            '<div class="model-id-edit">' +
+                '<span class="model-id-prefix" title="' + escHtml(t('models.idPrefixHint')) + '">' +
+                    escHtml(providerId) + '/</span>' +
+                '<input type="text" id="modelEditId" value="' + escHtml(bareId) + '"' +
+                    (isCustom ? '' : ' disabled') + '></div>' +
+            '<small class="form-hint">' + escHtml(t('models.idEditHint')) + '</small></div>' +
         '<div class="form-group"><label>' + t('models.modelName') + '</label>' +
-            '<input type="text" id="modelEditName" value="' + escHtml(m.name || m.id) + '"></div>' +
+            '<input type="text" id="modelEditName" value="' + escHtml(m.name || m.id) + '"' +
+                (isCustom ? '' : ' disabled') + '></div>' +
         '<div class="form-group">' + checkbox + '</div>' +
+        '<div class="metadata-section">' +
+            '<div class="metadata-section-header">' +
+                '<span class="metadata-section-title">' + t('models.capabilityTab') + '</span>' +
+                syncBtn +
+            '</div>' +
+            '<div id="metadataTab"></div>' +
+            overwrite +
+        '</div>' +
         '<div class="modal-actions">' +
             '<button class="btn btn-secondary" onclick="closeModal()">' + t('common.cancel') + '</button>' +
             '<button class="btn btn-primary" onclick="saveModelEdit(\'' + jsEsc(providerId) + '\', \'' + jsEsc(modelId) + '\')">' + t('models.saveEdit') + '</button>' +
         '</div>';
     document.getElementById('modal').style.display = 'flex';
+
+    var overwriteCb = document.getElementById('metadataOverwriteAll');
+    if (overwriteCb) {
+        overwriteCb.addEventListener('change', function() {
+            metadataState.overwriteAll = overwriteCb.checked;
+        });
+    }
+
+    // Promoting an auto row to custom takes ownership of its id and display
+    // name away from refresh, so both become editable the moment it is ticked.
+    var makeCustomCb = document.getElementById('modelMakeCustom');
+    var idInput = document.getElementById('modelEditId');
+    var nameInputEl = document.getElementById('modelEditName');
+    if (makeCustomCb && !isCustom) {
+        makeCustomCb.addEventListener('change', function() {
+            var unlocked = makeCustomCb.checked;
+            if (idInput) idInput.disabled = !unlocked;
+            if (nameInputEl) nameInputEl.disabled = !unlocked;
+        });
+    }
+
+    setupMetadataChips();
+    renderMetadataTab();
 }
 
 async function saveModelEdit(providerId, modelId) {
+    var bareId = modelId.indexOf(providerId + '/') === 0 ? modelId.substring(providerId.length + 1) : modelId;
     var m = models.find(function(item) { return item.id === modelId && item.provider === providerId; });
     if (!m) return;
     var nameInput = document.getElementById('modelEditName');
-    var makeManualCheckbox = document.getElementById('modelMakeManual');
-    var newName = (nameInput.value || '').trim() || modelId;
-    var makeManual = makeManualCheckbox && makeManualCheckbox.checked && m.source !== 'manual';
+    var idInput = document.getElementById('modelEditId');
+    var makeCustomCheckbox = document.getElementById('modelMakeCustom');
+    var newName = (nameInput.value || '').trim() || bareId;
+    var makeCustom = makeCustomCheckbox && makeCustomCheckbox.checked && m.source !== 'custom';
+
+    // The editable field holds the bare upstream id only: the "provider/" prefix
+    // is addressing syntax derived from the provider id, never part of the id.
+    var newBareId = idInput ? (idInput.value || '').trim() : bareId;
+    if (!newBareId) { toast(t('models.idRequired'), 'error'); return; }
+    // A bare upstream id may contain slashes ("des/deepseek" -> "vcp/des/deepseek").
+    // Only a leading segment naming another provider is rejected, because there the
+    // intent is ambiguous between a nested upstream path and moving the model.
+    if (newBareId.indexOf('/') !== -1) {
+        var head = newBareId.split('/')[0];
+        if (head !== providerId && (providers || []).some(function (p) { return p.id === head; })) {
+            toast(t('models.idForeignPrefix').replace('{provider}', head), 'error');
+            return;
+        }
+    }
+    var renaming = newBareId !== bareId;
+    if (renaming && !confirm(t('models.renameConfirm', { from: bareId, to: newBareId }))) return;
+
 
     // Build the model update payload: preserve all existing fields, override name/enabled,
-    // and add source: 'manual' only when the checkbox is checked.
+    // and add source: 'custom' only when the checkbox is checked.
     var provider = providers.find(function(item) { return item.id === providerId; });
     if (!provider) return;
     var existing = (provider.models || []).map(function(mm) {
         var obj = { id: mm.id, name: mm.name, enabled: mm.enabled };
-        if (mm.id === modelId && makeManual) {
-            obj.source = 'manual';
+        if (mm.id === bareId && makeCustom) {
+            obj.source = 'custom';
         }
         return obj;
     });
     // Update the name for the edited model
     for (var i = 0; i < existing.length; i++) {
-        if (existing[i].id === modelId) {
+        if (existing[i].id === bareId) {
             existing[i].name = newName;
         }
+    }
+
+    // M4: capability metadata — written via PUT capabilities (the only write path
+    // for these fields). Both custom and auto models are writable; auto rows just
+    // get overwritten again by the next upstream refresh.
+    var capBody = metadataCapabilityBody();
+    var capCount = Object.keys(capBody).length;
+    var saveCapabilities = false;
+    if (capCount) {
+        if (!confirm(t('models.metadataConfirm', { n: capCount }))) return;
+        saveCapabilities = true;
     }
 
     try {
@@ -1979,10 +2308,57 @@ async function saveModelEdit(providerId, modelId) {
             method: 'PUT',
             body: JSON.stringify({ models: existing })
         });
+
+        // Rename must follow the PUT above: the backend refuses to rename an
+        // auto row, so the promote-to-custom write has to land first. It must
+        // also precede the capabilities write, which targets the new id.
+        var effectiveId = bareId;
+        if (renaming) {
+            // The old id travels in the body, never in the path: an upstream id
+            // may contain slashes, and %2F is decoded before route matching, so
+            // a path-borne id would split into extra segments and return 405.
+            var renameRes = await api('/admin/providers/' + encodeURIComponent(providerId) +
+                '/models/rename', {
+                method: 'PUT',
+                body: JSON.stringify({ old_model_id: bareId, new_model_id: newBareId })
+            });
+            effectiveId = newBareId;
+            toast(t('models.renamed', { from: bareId, to: newBareId }));
+            reportRenameWarnings(renameRes);
+        }
+
+        if (saveCapabilities) {
+            await api('/admin/providers/' + encodeURIComponent(providerId) +
+                '/models/' + encodeURIComponent(effectiveId) + '/capabilities', {
+                method: 'PUT',
+                body: JSON.stringify(capBody)
+            });
+            toast(t('models.metadataSaved'));
+        }
         closeModal();
         await Promise.all([loadProviders(), loadModels()]);
     } catch (e) { toast(t('providers.updateFail') + ': ' + e.message, 'error'); }
 }
+
+// Surface references the backend deliberately did NOT rewrite. These are not
+// errors: the rename succeeded. They are places where silent breakage would
+// otherwise go unnoticed, so they get a warning toast instead of being hidden.
+function reportRenameWarnings(res) {
+    var warnings = (res && res.warnings) || [];
+    if (!warnings.length) return;
+    var wildcards = warnings.filter(function(w) { return w.kind === 'wildcard_no_longer_matches'; });
+    var ambiguous = warnings.filter(function(w) { return w.kind === 'ambiguous_bare_id'; });
+    if (wildcards.length) {
+        var names = wildcards.map(function(w) { return w.name + ' (' + w.pattern + ')'; }).join(', ');
+        toast(t('models.renameWildcardWarn', { n: wildcards.length, rules: names }), 'error');
+    }
+    if (ambiguous.length) {
+        var provs = ambiguous.map(function(w) { return (w.providers || []).join(', '); }).join('; ');
+        toast(t('models.renameAmbiguousWarn', { providers: provs }), 'error');
+    }
+}
+
+
 function showAddProviderModal() {
     document.getElementById('modalContent').innerHTML = providerFormHtml(t('providers.addTitle'), {}, 'addProvider()');
     document.getElementById('modal').style.display = 'flex';
@@ -2151,9 +2527,9 @@ function renderModels() {
 
         for (var mi = 0; mi < groupModels.length; mi++) {
             var m = groupModels[mi];
-            var isManual = m.source === 'manual';
-            var sourceBadge = '<span class="model-source-badge ' + (isManual ? 'manual' : 'auto') + '">' +
-                (isManual ? t('models.sourceManual') : t('models.sourceAuto')) + '</span>';
+            var isCustom = m.source === 'custom';
+            var sourceBadge = '<span class="model-source-badge ' + (isCustom ? 'custom' : 'auto') + '">' +
+                (isCustom ? t('models.sourceCustom') : t('models.sourceAuto')) + '</span>';
             html += '<div class="model-item">' +
                 '<div class="model-info">' +
                     '<span class="model-name">' + escHtml(m.name || m.id) + sourceBadge + '</span>' +
