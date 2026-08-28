@@ -1,15 +1,15 @@
-"""Tests for custom model source mechanism (auto vs manual).
+"""Tests for custom model source mechanism (auto vs custom).
 
 Confirmed semantics (2026-08-26, after subagent review):
 1. provider_models gets a `source` column (TEXT NOT NULL DEFAULT 'auto').
-2. add_provider models array = manual seeds -> source='manual'.
+2. add_provider models array = custom seeds -> source='custom'.
    DB column DEFAULT 'auto' applies only to rows inserted by refresh discovery.
 3. update_provider does NOT flip an existing model's source (merge/insert only;
    existing auto models stay auto even if passed again).
 4. refresh_provider_models only deletes stale AUTO models; MANUAL models are
    kept even when absent from upstream. Manual model_name is NOT overwritten
    by refresh (UPDATE branch limited to source='auto').
-5. Deleting a provider cascades to ALL its models (auto + manual).
+5. Deleting a provider cascades to ALL its models (auto + custom).
 6. A delete-model entry point exists (delete_provider_model).
 """
 import sqlite3
@@ -81,29 +81,29 @@ def test_source_column_default_is_auto_in_schema():
     assert row["source"] == "auto"
 
 
-# --- Requirement 2: add_provider models are manual seeds ----------------------
+# --- Requirement 2: add_provider models are custom seeds ----------------------
 
-def test_add_provider_marks_models_manual():
+def test_add_provider_marks_models_custom():
     add_provider(_provider("p", [
         {"id": "custom-1", "name": "Custom 1", "enabled": True},
     ]))
     p = get_provider("p")
     assert p["models"][0]["id"] == "custom-1"
-    assert p["models"][0]["source"] == "manual"
+    assert p["models"][0]["source"] == "custom"
 
 
 # --- Requirement 3: update_provider merge/insert, does NOT flip source --------
 
-def test_update_provider_adds_new_model_as_manual():
+def test_update_provider_adds_new_model_as_custom():
     add_provider(_provider("p"))
-    update_provider("p", {"models": [{"id": "new-manual", "name": "N", "enabled": True}]})
+    update_provider("p", {"models": [{"id": "new-custom", "name": "N", "enabled": True}]})
     p = get_provider("p")
-    newm = next(m for m in p["models"] if m["id"] == "new-manual")
-    assert newm["source"] == "manual"
+    newm = next(m for m in p["models"] if m["id"] == "new-custom")
+    assert newm["source"] == "custom"
 
 
 def test_update_provider_does_not_flip_existing_auto_model():
-    """Passing an existing auto model in update must NOT turn it manual."""
+    """Passing an existing auto model in update must NOT turn it custom."""
     add_provider(_provider("p"))
     with db_mod.get_db() as db:
         db.execute(
@@ -118,23 +118,23 @@ def test_update_provider_does_not_flip_existing_auto_model():
 
 def test_update_provider_merge_keeps_models_not_in_payload():
     """update_provider is merge/insert, never replaces: models not in the
-    payload must survive (manual and auto alike)."""
+    payload must survive (custom and auto alike)."""
     add_provider(_provider("p", [
-        {"id": "manual-1", "name": "M", "enabled": True},
+        {"id": "custom-1", "name": "M", "enabled": True},
     ]))
     with db_mod.get_db() as db:
         db.execute(
             "INSERT INTO provider_models (provider_id, model_id, model_name, enabled) VALUES ('p','auto-1','A',1)"
         )
-    # update only mentions auto-1; manual-1 omitted -> must stay
+    # update only mentions auto-1; custom-1 omitted -> must stay
     update_provider("p", {"models": [{"id": "auto-1", "name": "A", "enabled": True}]})
     p = get_provider("p")
-    assert _model_ids(p) == {"manual-1", "auto-1"}
+    assert _model_ids(p) == {"custom-1", "auto-1"}
 
 
-# --- Requirement 3.5: explicit "make manual" opt-in ---------------------------
+# --- Requirement 3.5: explicit "make custom" opt-in ---------------------------
 # Editing an auto model does NOT promote it. The caller must send
-# source="manual" explicitly. Omitting source keeps the stored value, so the
+# source="custom" explicitly. Omitting source keeps the stored value, so the
 # rule-3 "never flip" semantics stay intact for plain edits.
 
 def test_update_provider_without_source_keeps_auto():
@@ -151,36 +151,36 @@ def test_update_provider_without_source_keeps_auto():
     assert row["name"] == "After"          # the edit still applies
 
 
-def test_update_provider_explicit_manual_promotes_auto():
-    """Passing source='manual' promotes an auto model."""
+def test_update_provider_explicit_custom_promotes_auto():
+    """Passing source='custom' promotes an auto model."""
     add_provider(_provider("p"))
     with db_mod.get_db() as db:
         db.execute(
             "INSERT INTO provider_models (provider_id, model_id, model_name, enabled) VALUES ('p','auto-1','A',1)"
         )
     update_provider("p", {"models": [
-        {"id": "auto-1", "name": "Pinned", "enabled": True, "source": "manual"},
+        {"id": "auto-1", "name": "Pinned", "enabled": True, "source": "custom"},
     ]})
     p = get_provider("p")
     row = next(m for m in p["models"] if m["id"] == "auto-1")
-    assert row["source"] == "manual"
+    assert row["source"] == "custom"
     assert row["name"] == "Pinned"
 
 
-def test_update_provider_explicit_auto_does_not_demote_manual():
-    """source='auto' must never demote a manual model (only 'manual' acts)."""
+def test_update_provider_explicit_auto_does_not_demote_custom():
+    """source='auto' must never demote a custom model (only 'custom' acts)."""
     add_provider(_provider("p", [{"id": "m1", "name": "M", "enabled": True}]))
     update_provider("p", {"models": [
         {"id": "m1", "name": "M", "enabled": True, "source": "auto"},
     ]})
     p = get_provider("p")
     row = next(m for m in p["models"] if m["id"] == "m1")
-    assert row["source"] == "manual"
+    assert row["source"] == "custom"
 
 
 @pytest.mark.asyncio
 async def test_promoted_model_survives_refresh(monkeypatch):
-    """An auto model promoted to manual is no longer deleted by refresh."""
+    """An auto model promoted to custom is no longer deleted by refresh."""
     add_provider(_provider("p"))
     with db_mod.get_db() as db:
         db.execute(
@@ -188,7 +188,7 @@ async def test_promoted_model_survives_refresh(monkeypatch):
         )
     # promote it the way the UI checkbox does
     update_provider("p", {"models": [
-        {"id": "preview-x", "name": "Preview", "enabled": True, "source": "manual"},
+        {"id": "preview-x", "name": "Preview", "enabled": True, "source": "custom"},
     ]})
 
     async def discover(_pid):
@@ -239,7 +239,7 @@ async def test_promoted_model_name_not_overwritten_by_refresh(monkeypatch):
             "INSERT INTO provider_models (provider_id, model_id, model_name, enabled) VALUES ('p','shared','Upstream Name',1)"
         )
     update_provider("p", {"models": [
-        {"id": "shared", "name": "My Label", "enabled": True, "source": "manual"},
+        {"id": "shared", "name": "My Label", "enabled": True, "source": "custom"},
     ]})
 
     async def discover(_pid):
@@ -250,19 +250,19 @@ async def test_promoted_model_name_not_overwritten_by_refresh(monkeypatch):
 
     await refresh_provider_models("p")
     row = next(m for m in get_provider("p")["models"] if m["id"] == "shared")
-    assert row["source"] == "manual"
+    assert row["source"] == "custom"
     assert row["name"] == "My Label"
 
 
 # --- Requirement 4: refresh only deletes stale AUTO models --------------------
 
 @pytest.mark.asyncio
-async def test_refresh_keeps_manual_model_not_in_upstream(monkeypatch):
+async def test_refresh_keeps_custom_model_not_in_upstream(monkeypatch):
     add_provider(_provider("p", [
         {"id": "auto-model", "name": "Auto", "enabled": True},
-        {"id": "hidden-manual", "name": "Hidden", "enabled": True},
+        {"id": "hidden-custom", "name": "Hidden", "enabled": True},
     ]))
-    _set_source("p", "hidden-manual", "manual")
+    _set_source("p", "hidden-custom", "custom")
 
     async def discover(_pid):
         return [
@@ -277,10 +277,10 @@ async def test_refresh_keeps_manual_model_not_in_upstream(monkeypatch):
     ids = _model_ids(p)
 
     assert "auto-model" in ids
-    assert "hidden-manual" in ids          # kept despite absent from upstream
+    assert "hidden-custom" in ids          # kept despite absent from upstream
     assert "brand-new" in ids
-    hidden = next(m for m in p["models"] if m["id"] == "hidden-manual")
-    assert hidden["source"] == "manual"
+    hidden = next(m for m in p["models"] if m["id"] == "hidden-custom")
+    assert hidden["source"] == "custom"
     assert result["removed"] == 0
 
 
@@ -289,7 +289,7 @@ async def test_refresh_still_deletes_stale_auto_model(monkeypatch):
     add_provider(_provider("p", [
         {"id": "gone-auto", "name": "Gone", "enabled": True},
     ]))
-    # add_provider seeds are manual by design (rule 1), so flip this one to
+    # add_provider seeds are custom by design (rule 1), so flip this one to
     # auto to model a row that a previous refresh had discovered.
     _set_source("p", "gone-auto", "auto")
 
@@ -306,16 +306,16 @@ async def test_refresh_still_deletes_stale_auto_model(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_refresh_mixed_deletes_auto_keeps_manual_counts(monkeypatch):
-    """Mixed: one stale auto removed + one manual kept -> removed counts only auto."""
+async def test_refresh_mixed_deletes_auto_keeps_custom_counts(monkeypatch):
+    """Mixed: one stale auto removed + one custom kept -> removed counts only auto."""
     add_provider(_provider("p", [
         {"id": "gone-auto", "name": "Gone", "enabled": True},
-        {"id": "kept-manual", "name": "Kept", "enabled": True},
+        {"id": "kept-custom", "name": "Kept", "enabled": True},
     ]))
-    # This model was seeded by add_provider (manual by rule 1), so flip to
+    # This model was seeded by add_provider (custom by rule 1), so flip to
     # auto to simulate a row that a previous refresh discovered.
     _set_source("p", "gone-auto", "auto")
-    _set_source("p", "kept-manual", "manual")
+    _set_source("p", "kept-custom", "custom")
 
     async def discover(_pid):
         return [{"id": "upstream-only", "name": "U"}]
@@ -324,17 +324,17 @@ async def test_refresh_mixed_deletes_auto_keeps_manual_counts(monkeypatch):
 
     result = await refresh_provider_models("p")
     p = get_provider("p")
-    assert _model_ids(p) == {"kept-manual", "upstream-only"}
+    assert _model_ids(p) == {"kept-custom", "upstream-only"}
     assert result["removed"] == 1
 
 
 @pytest.mark.asyncio
-async def test_refresh_does_not_overwrite_manual_model_name(monkeypatch):
-    """If a manual model id also appears upstream, refresh must NOT rename it."""
+async def test_refresh_does_not_overwrite_custom_model_name(monkeypatch):
+    """If a custom model id also appears upstream, refresh must NOT rename it."""
     add_provider(_provider("p", [
         {"id": "shared-id", "name": "My Custom Name", "enabled": True},
     ]))
-    _set_source("p", "shared-id", "manual")
+    _set_source("p", "shared-id", "custom")
 
     async def discover(_pid):
         return [{"id": "shared-id", "name": "Upstream Name"}]
@@ -345,7 +345,7 @@ async def test_refresh_does_not_overwrite_manual_model_name(monkeypatch):
     p = get_provider("p")
     row = next(m for m in p["models"] if m["id"] == "shared-id")
     assert row["name"] == "My Custom Name"
-    assert row["source"] == "manual"
+    assert row["source"] == "custom"
 
 
 @pytest.mark.asyncio
@@ -353,9 +353,9 @@ async def test_refresh_empty_discovered_keeps_everything(monkeypatch):
     """Empty upstream list -> nothing deleted (safe guard), auto kept too."""
     add_provider(_provider("p", [
         {"id": "auto-1", "name": "A", "enabled": True},
-        {"id": "manual-1", "name": "M", "enabled": True},
+        {"id": "custom-1", "name": "M", "enabled": True},
     ]))
-    _set_source("p", "manual-1", "manual")
+    _set_source("p", "custom-1", "custom")
 
     async def discover(_pid):
         return []
@@ -364,7 +364,7 @@ async def test_refresh_empty_discovered_keeps_everything(monkeypatch):
 
     result = await refresh_provider_models("p")
     p = get_provider("p")
-    assert _model_ids(p) == {"auto-1", "manual-1"}
+    assert _model_ids(p) == {"auto-1", "custom-1"}
     assert result["removed"] == 0
 
 
@@ -389,10 +389,10 @@ async def test_refresh_error_path_keeps_existing(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_refresh_provider_isolation(monkeypatch):
-    """Refreshing provider A must not touch provider B's manual model."""
+    """Refreshing provider A must not touch provider B's custom model."""
     add_provider(_provider("a", [{"id": "m-a", "name": "MA", "enabled": True}]))
     add_provider(_provider("b", [{"id": "m-b", "name": "MB", "enabled": True}]))
-    _set_source("b", "m-b", "manual")
+    _set_source("b", "m-b", "custom")
 
     async def discover(pid):
         return [] if pid == "a" else [{"id": "m-b", "name": "MB"}]
@@ -402,17 +402,17 @@ async def test_refresh_provider_isolation(monkeypatch):
     await refresh_provider_models("a")
     b = get_provider("b")
     assert _model_ids(b) == {"m-b"}
-    assert next(m for m in b["models"] if m["id"] == "m-b")["source"] == "manual"
+    assert next(m for m in b["models"] if m["id"] == "m-b")["source"] == "custom"
 
 
 # --- Requirement 5: deleting provider cascades to all models ------------------
 
-def test_delete_provider_cascades_auto_and_manual_models():
+def test_delete_provider_cascades_auto_and_custom_models():
     add_provider(_provider("p", [
         {"id": "auto-1", "name": "A", "enabled": True},
-        {"id": "manual-1", "name": "M", "enabled": True},
+        {"id": "custom-1", "name": "M", "enabled": True},
     ]))
-    _set_source("p", "manual-1", "manual")
+    _set_source("p", "custom-1", "custom")
 
     assert delete_provider("p") is True
     with db_mod.get_db() as db:
@@ -422,17 +422,17 @@ def test_delete_provider_cascades_auto_and_manual_models():
     assert remaining == 0
 
 
-# --- Requirement 6: delete a single manual/auto model -------------------------
+# --- Requirement 6: delete a single custom/auto model -------------------------
 
 def test_delete_provider_model_removes_single_model():
     from app.database import delete_provider_model
     add_provider(_provider("p", [
         {"id": "auto-1", "name": "A", "enabled": True},
-        {"id": "manual-1", "name": "M", "enabled": True},
+        {"id": "custom-1", "name": "M", "enabled": True},
     ]))
-    _set_source("p", "manual-1", "manual")
+    _set_source("p", "custom-1", "custom")
 
-    assert delete_provider_model("p", "manual-1") is True
+    assert delete_provider_model("p", "custom-1") is True
     p = get_provider("p")
     assert _model_ids(p) == {"auto-1"}
 
