@@ -1,7 +1,7 @@
 """
 Discovery integration tests for model capability metadata (M3).
 
-Design reference: docs/模型能力元数据扩展-设计方案.md §2.4 / §4.2 / §6 用例 5 / 10.
+Design reference: docs/plans/模型能力元数据扩展-设计方案.md §2.4 / §4.2 / §6 用例 5 / 10.
 
 Contract these tests pin down:
 - refresh_provider_models fills capability fields for `source='auto'` rows only.

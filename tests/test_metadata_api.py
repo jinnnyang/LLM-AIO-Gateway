@@ -1,7 +1,7 @@
 """
 API tests for the model capability metadata endpoints (M4).
 
-Design reference: docs/模型能力元数据扩展-设计方案.md §4.3 / §4.4 / §6 用例 4/8/11.
+Design reference: docs/plans/模型能力元数据扩展-设计方案.md §4.3 / §4.4 / §6 用例 4/8/11.
 
 Contract these tests pin down:
 - GET .../metadata-candidates is read-only: it never writes the database.

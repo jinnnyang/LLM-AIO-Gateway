@@ -1,0 +1,7 @@
+docs: 按 plans / issues 分类整理，补 innerHTML 覆盖缺口记录
+
+- docs/plans/ 收录规划、设计方案与评审往来；docs/issues/ 收录开发中发现但非当次任务主线的问题
+- 三层 README 索引，各带分类边界说明与状态列
+- 新增 docs/issues/前端innerHTML转义覆盖缺口.md，并纠正 PR #5 里"该测试失败"的错误记录：
+  实测通过（882 passed），真实遗留是守卫仅覆盖元数据路径，app.js 61 处 innerHTML 其余未被覆盖
+- 同步 app/ tests/ 中 8 处设计方案路径引用

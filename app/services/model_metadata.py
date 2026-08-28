@@ -1,7 +1,7 @@
 """
 Model capability metadata resolution: context length, prices, and modalities.
 
-Design: docs/模型能力元数据扩展-设计方案.md §2.1-§2.3 / §4.1 / §8 定案 1-14.
+Design: docs/plans/模型能力元数据扩展-设计方案.md §2.1-§2.3 / §4.1 / §8 定案 1-14.
 
 Three sources always merge in parallel:
   1. models.dev  (network, $/M token, includes cached_input_price)

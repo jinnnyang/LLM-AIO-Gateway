@@ -1,7 +1,7 @@
 """
 DB migration tests for the model capability metadata columns.
 
-Design reference: docs/模型能力元数据扩展-设计方案.md §3.1 / §6 用例 11.
+Design reference: docs/plans/模型能力元数据扩展-设计方案.md §3.1 / §6 用例 11.
 
 Covers:
 - New install: CREATE TABLE already carries the 7 new columns.

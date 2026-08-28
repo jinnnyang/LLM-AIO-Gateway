@@ -284,7 +284,7 @@ def _migrate_image_generation_stats(conn: sqlite3.Connection) -> None:
 
 def _migrate_model_capability_metadata(conn: sqlite3.Connection) -> None:
     """Add model capability columns (context_length, prices, modalities) to provider_models if missing.
-    Design: docs/模型能力元数据扩展-设计方案.md §3 / §8 定案 1-3.
+    Design: docs/plans/模型能力元数据扩展-设计方案.md §3 / §8 定案 1-3.
     """
     existing = {row[1] for row in conn.execute("PRAGMA table_info(provider_models)").fetchall()}
     columns = {

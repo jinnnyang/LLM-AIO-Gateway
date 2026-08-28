@@ -1,7 +1,7 @@
 """
 Tests for the model capability matching tool (app/services/model_metadata.py).
 
-Design reference: docs/模型能力元数据扩展-设计方案.md §2.1-§2.3 / §4.1 / §6.
+Design reference: docs/plans/模型能力元数据扩展-设计方案.md §2.1-§2.3 / §4.1 / §6.
 
 Contract these tests pin down (M2):
 
